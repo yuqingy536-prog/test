@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>消防檢修申報自動報價系統 v3.0</title>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 引入 Babel 用於解析 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 設定列印樣式與字型 -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        
+        @media print {
+            @page { margin: 0.5cm; }
+            body { -webkit-print-color-adjust: exact; }
+        }
+        
+        /* 動畫效果 */
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Icon Components (因為是單一檔案，將 Lucide Icons 轉為 SVG Components) ---
+        const IconBase = ({ size = 24, className = "", children }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+        );
+        const Calculator = (p) => <IconBase {...p}><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></IconBase>;
+        const RefreshCcw = (p) => <IconBase {...p}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></IconBase>;
+        const Minus = (p) => <IconBase {...p}><path d="M5 12h14"/></IconBase>;
+        const Plus = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="M12 5v14"/></IconBase>;
+        const FileText = (p) => <IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></IconBase>;
+        const CheckCircle2 = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></IconBase>;
+        const Printer = (p) => <IconBase {...p}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></IconBase>;
+        const Info = (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></IconBase>;
+        const Ruler = (p) => <IconBase {...p}><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></IconBase>;
+        const UserCheck = (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></IconBase>;
+        const Building = (p) => <IconBase {...p}><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></IconBase>;
+        const ArrowRight = (p) => <IconBase {...p}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></IconBase>;
+        const Flame = (p) => <IconBase {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.243-2.143.7-3.1 1.4 1.3 1.9 2.5 2.8 3.6Z"/></IconBase>;
+        const BellRing = (p) => <IconBase {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></IconBase>;
+        const DoorOpen = (p) => <IconBase {...p}><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></IconBase>;
+        const Wrench = (p) => <IconBase {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></IconBase>;
+        const CheckSquare = (p) => <IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>;
+        const Square = (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="3" rx="2"/></IconBase>;
+
+
+        const FireSafetyQuoteCalculator = () => {
+          // --- 狀態管理 ---
+          const [selectedCategory, setSelectedCategory] = useState(''); // 甲乙丙丁戊
+          const [selectedUsage, setSelectedUsage] = useState(''); // 詳細用途
+          const [area, setArea] = useState(''); // 平方公尺
+          const [floors, setFloors] = useState(''); // 樓層數量
+          const [selectedSystems, setSelectedSystems] = useState([]); // 新增：已選擇的系統
+          const [quantities, setQuantities] = useState({});
+          const [includeRecheck, setIncludeRecheck] = useState(false);
+          const [totalPrice, setTotalPrice] = useState({ filing: 0, inspection: 0, other: 0, total: 0 });
+
+          // --- 參數設定 ---
+          const BASE_AREA_LIMIT = 3000; // 基本費涵蓋面積 (3000 m^2)
+          const AREA_STEP = 500; // 每 500 m^2 為一個級距
+          const PRICE_PER_STEP = 1000; // 每個級距加收 1000 元
+          const RECHECK_FEE = 3000; 
+
+          // --- 1. 場所分類資料 ---
+          const placeStandards = [
+            {
+              id: 'A',
+              categoryName: '甲類場所',
+              basePrice: 6000,
+              description: '供公眾出入頻繁，避難弱者之場所',
+              items: [
+                '電影院、戲院、歌廳、演藝場、歌舞廳',
+                '夜總會、俱樂部、理容院、三溫暖',
+                'KTV、MTV、視聽歌唱場所',
+                '保齡球館、撞球場、集會堂',
+                '觀光飯店、飯店、旅館、招待所',
+                '商場、市場、百貨商場、超級市場',
+                '餐廳、飲食店、咖啡廳、飲茶',
+                '醫院、療養院、榮譽國民之家',
+                '護理之家、產後護理機構、長照機構',
+                '幼稚園、托兒所 (樓地板面積500㎡以上)'
+              ]
+            },
+            {
+              id: 'B',
+              categoryName: '乙類場所',
+              basePrice: 6000,
+              description: '供集會、辦公、就學之場所',
+              items: [
+                '車站、候船室、航空站',
+                '學校、補習班、訓練班',
+                '圖書館、博物館、美術館',
+                '寺廟、宗祠、教堂、靈骨塔',
+                '辦公室、證券交易所、金融機構',
+                '集合住宅、寄宿舍',
+                '體育館、活動中心',
+                '幼稚園、托兒所 (樓地板面積未滿500㎡)'
+              ]
+            },
+            {
+              id: 'C',
+              categoryName: '丙類場所',
+              basePrice: 6000,
+              description: '供工業、儲存及特定用途',
+              items: [
+                '電信機器室',
+                '汽車修護廠、飛機修理廠',
+                '室內停車場、建築物依法附設之停車空間'
+              ]
+            },
+            {
+              id: 'D',
+              categoryName: '丁類場所',
+              basePrice: 6000,
+              description: '中低度危險工作場所',
+              items: [
+                '高度危險工作場所',
+                '中度危險工作場所',
+                '低度危險工作場所 (一般工廠)',
+                '倉庫'
+              ]
+            },
+            {
+              id: 'E',
+              categoryName: '戊類場所',
+              basePrice: 6000,
+              description: '複合用途建築物',
+              items: [
+                '複合用途建築物 (住商混合等)',
+                '地下建築物'
+              ]
+            }
+          ];
+
+          // --- 2. 系統清單 (供客戶勾選) ---
+          const systemOptions = [
+            { id: 'fire_extinguisher', name: '滅火器設備' },
+            { id: 'indoor_hydrant', name: '室內消防栓設備' },
+            { id: 'outdoor_hydrant', name: '室外消防栓設備' },
+            { id: 'sprinkler', name: '自動撒水設備' },
+            { id: 'water_mist', name: '水霧滅火設備' },
+            { id: 'foam', name: '泡沫滅火設備' },
+            { id: 'inert_gas', name: '惰性氣體滅火設備' },
+            { id: 'dry_powder', name: '乾粉滅火設備' },
+            { id: 'halon', name: '海龍滅火設備' },
+            { id: 'simple_auto', name: '簡易自動滅火設備' },
+            { id: 'halide', name: '鹵化烴滅火設備' },
+            { id: 'alarm', name: '火警自動警報設備' },
+            { id: 'gas_leak', name: '瓦斯漏氣火警自動警報設備' },
+            { id: 'broadcast', name: '緊急廣播設備' },
+            { id: '119_notify', name: '一一九火災通報裝置' },
+            { id: 'sign', name: '標示設備' },
+            { id: 'escape', name: '避難器具' },
+            { id: 'emergency_light', name: '緊急照明設備' },
+            { id: 'water_connection', name: '連結送水管' },
+            { id: 'water_pool', name: '消防專用蓄水池' },
+            { id: 'smoke_exhaust', name: '排煙設備' },
+            { id: 'radio', name: '無線電通信輔助設備' },
+            { id: 'emergency_socket', name: '緊急電源插座' },
+            { id: 'emergency_power', name: '緊急電源設備' },
+            { id: 'cooling_sprinkler', name: '冷卻撒水設備' },
+            { id: 'water_cannon', name: '射水設備' },
+            { id: 'heat_wire', name: '耐燃耐熱配線' },
+            { id: 'monitor_control', name: '防災監控系統綜合操作裝置' }
+          ];
+
+          // --- 3. 設備計價清單 (包含與系統的關聯) ---
+          const equipmentList = [
+            // 1. 滅火設備
+            { id: 'extinguisher', name: '滅火器', unit: '支', price: 10, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['fire_extinguisher'] },
+            { id: 'hydrant_indoor', name: '室內消防栓', unit: '箱', price: 500, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['indoor_hydrant'] },
+            { id: 'hydrant_outdoor', name: '室外消防栓', unit: '支', price: 500, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['outdoor_hydrant'] },
+            { id: 'sprinkler_head', name: '自動撒水頭 (抽測)', unit: '顆', price: 50, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['sprinkler', 'water_mist', 'simple_auto', 'cooling_sprinkler'] }, 
+            { id: 'sprinkler_valve', name: '自動警報逆止閥', unit: '組', price: 300, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['sprinkler', 'water_mist', 'cooling_sprinkler'] },
+            { id: 'foam_switch', name: '泡沫手動啟動開關', unit: '組', price: 50, category: '滅火設備', icon: <Flame size={18} />, relatedSystems: ['foam'] },
+            
+            // 2. 警報設備
+            { id: 'alarm_panel', name: '火警受信總機', unit: '台', price: 3000, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['alarm', 'gas_leak', 'monitor_control'] },
+            { id: 'alarm_detector', name: '火警探測器', unit: '顆', price: 20, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['alarm', 'gas_leak'] },
+            { id: 'alarm_manual', name: '手動報警機', unit: '組', price: 50, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['alarm'] },
+            { id: 'broadcast_host', name: '緊急廣播主機', unit: '台', price: 3000, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['broadcast'] },
+            { id: 'broadcast_speaker', name: '廣播揚聲器', unit: '顆', price: 80, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['broadcast'] },
+            { id: '119_device', name: '119火災通報裝置', unit: '台', price: 500, category: '警報設備', icon: <BellRing size={18} />, relatedSystems: ['119_notify'] },
+
+            // 3. 避難逃生設備
+            { id: 'light_exit', name: '標示設備 (出口/方向)', unit: '具', price: 10, category: '避難逃生設備', icon: <DoorOpen size={18} />, relatedSystems: ['sign'] },
+            { id: 'light_emergency', name: '緊急照明設備', unit: '具', price: 10, category: '避難逃生設備', icon: <DoorOpen size={18} />, relatedSystems: ['emergency_light'] },
+            { id: 'escape_device', name: '避難器具 (緩降機等)', unit: '具', price: 100, category: '避難逃生設備', icon: <DoorOpen size={18} />, relatedSystems: ['escape'] },
+
+            // 4. 消防搶救上之必要設備 (含系統設備)
+            { id: 'pump_group', name: '消防幫浦組 (撒水/栓/泡沫)', unit: '組', price: 2000, category: '消防搶救上之必要設備', icon: <Wrench size={18} />, relatedSystems: ['indoor_hydrant', 'outdoor_hydrant', 'sprinkler', 'water_mist', 'foam', 'cooling_sprinkler', 'water_cannon'] },
+            { id: 'generator', name: '緊急發電機', unit: '台', price: 2000, category: '消防搶救上之必要設備', icon: <Wrench size={18} />, relatedSystems: ['emergency_power'] },
+            { id: 'smoke_damper', name: '排煙閘門', unit: '個', price: 250, category: '消防搶救上之必要設備', icon: <Wrench size={18} />, relatedSystems: ['smoke_exhaust'] },
+            { id: 'water_connection', name: '連結送水管送水口', unit: '支', price: 300, category: '消防搶救上之必要設備', icon: <Wrench size={18} />, relatedSystems: ['water_connection'] },
+          ];
+
+          // 根據勾選的系統過濾出需要顯示的設備
+          const filteredEquipmentList = equipmentList.filter(item => 
+            item.relatedSystems.some(systemId => selectedSystems.includes(systemId))
+          );
+
+          // 依類別分組
+          const groupedEquipment = filteredEquipmentList.reduce((acc, item) => {
+            if (!acc[item.category]) acc[item.category] = [];
+            acc[item.category].push(item);
+            return acc;
+          }, {});
+
+          const categoryOrder = ['滅火設備', '警報設備', '避難逃生設備', '消防搶救上之必要設備'];
+
+          // --- 邏輯處理 ---
+
+          const toggleSystem = (id) => {
+            setSelectedSystems(prev => {
+              if (prev.includes(id)) {
+                return prev.filter(s => s !== id);
+              } else {
+                return [...prev, id];
+              }
+            });
+          };
+          
+          const handleInputChange = (id, value) => {
+            if (value === '') {
+              setQuantities(prev => ({ ...prev, [id]: '' }));
+              return;
+            }
+            const qty = parseInt(value);
+            if (!isNaN(qty) && qty >= 0) {
+              setQuantities(prev => ({ ...prev, [id]: qty }));
+            }
+          };
+
+          const handleQuantityChange = (id, delta) => {
+            setQuantities(prev => {
+              const currentQty = parseInt(prev[id]) || 0;
+              const newQty = Math.max(0, currentQty + delta);
+              return { ...prev, [id]: newQty };
+            });
+          };
+
+          const handleUsageChange = (e) => {
+            const value = e.target.value;
+            if (!value) {
+              setSelectedCategory('');
+              setSelectedUsage('');
+              return;
+            }
+            const [catId, usageName] = value.split('|');
+            setSelectedCategory(catId);
+            setSelectedUsage(usageName);
+          };
+
+          // 費用計算 Effect
+          useEffect(() => {
+            let filingFee = 0;
+            let inspectionFee = 0;
+            let otherFee = 0;
+
+            if (selectedCategory) {
+              const place = placeStandards.find(p => p.id === selectedCategory);
+              const base = place ? place.basePrice : 0;
+              
+              const areaNum = parseFloat(area) || 0;
+              let areaSurcharge = 0;
+              if (areaNum > BASE_AREA_LIMIT) {
+                const excessArea = areaNum - BASE_AREA_LIMIT;
+                const steps = Math.ceil(excessArea / AREA_STEP);
+                areaSurcharge = steps * PRICE_PER_STEP;
+              }
+
+              filingFee = base + areaSurcharge;
+            }
+
+            filteredEquipmentList.forEach(item => {
+              const qty = parseInt(quantities[item.id]) || 0;
+              inspectionFee += qty * item.price;
+            });
+
+            if (includeRecheck) {
+              otherFee += RECHECK_FEE;
+            }
+
+            setTotalPrice({
+              filing: Math.round(filingFee),
+              inspection: inspectionFee,
+              other: otherFee,
+              total: Math.round(filingFee) + inspectionFee + otherFee
+            });
+          }, [selectedCategory, quantities, area, includeRecheck, selectedSystems]);
+
+          const handleReset = () => {
+            if (window.confirm('確定要清空所有選擇的資料嗎？')) {
+              setSelectedCategory('');
+              setSelectedUsage('');
+              setArea('');
+              setFloors('');
+              setSelectedSystems([]);
+              setQuantities({});
+              setIncludeRecheck(false);
+              setTotalPrice({ filing: 0, inspection: 0, other: 0, total: 0 });
+            }
+          };
+
+          const handlePrint = () => {
+            window.print();
+          };
+
+          return (
+            <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-4 md:p-8 print:p-0 print:bg-white">
+              <div className="max-w-7xl mx-auto">
+                
+                {/* Header */}
+                <header className="mb-8 print:hidden flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                      <span className="bg-red-600 text-white p-2 rounded-lg shadow-lg shadow-red-200">
+                        <Calculator size={32} />
+                      </span>
+                      消防檢修申報自動報價系統 v3.0
+                    </h1>
+                    <p className="text-slate-500 mt-2 ml-1">
+                      先選擇系統，再輸入數量，自動計算檢修費用。
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={handleReset}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-red-600 transition shadow-sm"
+                    >
+                      <RefreshCcw size={18} /> 重新計算
+                    </button>
+                    <button 
+                      onClick={handlePrint}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition shadow-lg shadow-slate-300"
+                    >
+                      <Printer size={18} /> 列印報價單
+                    </button>
+                  </div>
+                </header>
+
+                <div className="flex flex-col lg:flex-row gap-8">
+                  
+                  {/* Main Content Area */}
+                  <div className="lg:w-3/4 space-y-6 print:w-full">
+                    
+                    {/* Step 1: Place Selection & Info */}
+                    <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-none print:shadow-none">
+                      <div className="bg-slate-50 p-4 border-b border-gray-200 flex items-center gap-2 print:bg-white print:px-0">
+                        <div className="bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                        <h2 className="font-bold text-lg text-slate-800">基本資料 (法規分類)</h2>
+                      </div>
+                      
+                      <div className="p-6 space-y-6">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-bold text-slate-700">
+                            請選擇場所實際用途 <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <select
+                              value={selectedCategory && selectedUsage ? `${selectedCategory}|${selectedUsage}` : ''}
+                              onChange={handleUsageChange}
+                              className="w-full p-3 pl-4 pr-10 bg-white border border-gray-300 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-red-500 text-slate-700 font-medium text-lg"
+                            >
+                              <option value="">-- 請下拉選擇 (依消防設置標準第12條分類) --</option>
+                              {placeStandards.map((cat) => (
+                                <optgroup key={cat.id} label={`${cat.categoryName} - ${cat.description}`}>
+                                  {cat.items.map((item, idx) => (
+                                    <option key={`${cat.id}-${idx}`} value={`${cat.id}|${item}`}>
+                                      {item}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500">
+                              <ArrowRight className="transform rotate-90" size={20} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                              <Ruler size={16} /> 申報場所樓地板面積 (平方公尺 m²)
+                            </label>
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={area}
+                              onChange={(e) => setArea(e.target.value)}
+                              placeholder="例: 120"
+                              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:bg-white outline-none transition font-bold text-lg"
+                            />
+                            <div className="mt-1 text-xs text-gray-400">
+                              * 基本費含 {BASE_AREA_LIMIT} m²，超過每 {AREA_STEP} m² 加收 ${PRICE_PER_STEP}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                              <Building size={16} /> 建築物樓層數 (層)
+                            </label>
+                            <input 
+                              type="number" 
+                              min="1"
+                              value={floors}
+                              onChange={(e) => setFloors(e.target.value)}
+                              placeholder="例: 5"
+                              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:bg-white outline-none transition font-bold text-lg"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Step 2: System Selection */}
+                    <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-none print:shadow-none">
+                      <div className="bg-slate-50 p-4 border-b border-gray-200 flex items-center gap-2 print:bg-white print:px-0">
+                        <div className="bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                        <h2 className="font-bold text-lg text-slate-800">請勾選場所既有之消防安全設備</h2>
+                      </div>
+                      <div className="p-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {systemOptions.map(sys => (
+                            <label key={sys.id} className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-all hover:bg-slate-50 ${selectedSystems.includes(sys.id) ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-200'}`}>
+                              <div className="relative flex items-center">
+                                <input 
+                                  type="checkbox" 
+                                  className="peer sr-only"
+                                  checked={selectedSystems.includes(sys.id)}
+                                  onChange={() => toggleSystem(sys.id)}
+                                />
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center text-white transition-colors ${selectedSystems.includes(sys.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300 peer-checked:bg-blue-600 peer-checked:border-blue-600'}`}>
+                                  {selectedSystems.includes(sys.id) && <CheckSquare size={14} />}
+                                </div>
+                              </div>
+                              <span className={`text-sm font-medium ${selectedSystems.includes(sys.id) ? 'text-blue-800' : 'text-slate-600'}`}>{sys.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {selectedSystems.length === 0 && (
+                          <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 text-sm rounded-lg flex items-center gap-2">
+                            <Info size={16} /> 尚未勾選任何設備，請至少選擇一項以進行估價。
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Step 3: Equipment Quantities (Filtered) */}
+                    {selectedSystems.length > 0 && (
+                      <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-none print:shadow-none fade-in">
+                        <div className="bg-slate-50 p-4 border-b border-gray-200 flex items-center gap-2 print:bg-white print:px-0">
+                          <div className="bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                          <h2 className="font-bold text-lg text-slate-800">輸入設備數量 (依勾選系統顯示)</h2>
+                        </div>
+                        
+                        <div className="p-6 space-y-8">
+                          {Object.keys(groupedEquipment).length === 0 ? (
+                            <div className="text-gray-500 text-center py-4">
+                              您選擇的系統目前無需輸入計價數量，將僅計算簽證申報費。
+                            </div>
+                          ) : (
+                            categoryOrder.map((category) => {
+                              const items = groupedEquipment[category];
+                              if (!items) return null;
+                              
+                              return (
+                                <div key={category} className="print:break-inside-avoid">
+                                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2 after:content-[''] after:flex-1 after:h-px after:bg-gray-200">
+                                    {items[0].icon} {category}
+                                  </h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {items.map((item) => (
+                                      <div key={item.id} className="flex flex-col gap-2 group">
+                                        <div className="flex justify-between items-end">
+                                          <label className="text-sm font-medium text-slate-700 group-hover:text-red-700 transition">{item.name}</label>
+                                          <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded">${item.price}/{item.unit}</span>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <button 
+                                            onClick={() => handleQuantityChange(item.id, -1)}
+                                            className="w-10 h-10 flex items-center justify-center bg-gray-50 border border-gray-200 rounded-l-lg text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition print:hidden active:bg-red-100"
+                                            disabled={!quantities[item.id]}
+                                          >
+                                            <Minus size={16} />
+                                          </button>
+                                          <input 
+                                            type="number" 
+                                            min="0"
+                                            value={quantities[item.id] !== undefined ? quantities[item.id] : ''}
+                                            onChange={(e) => handleInputChange(item.id, e.target.value)}
+                                            placeholder="0"
+                                            className="flex-1 h-10 text-center font-bold text-slate-900 border-y border-gray-200 focus:border-red-500 focus:ring-0 outline-none transition print:border print:rounded print:w-full placeholder:text-gray-200" 
+                                          />
+                                          <button 
+                                            onClick={() => handleQuantityChange(item.id, 1)}
+                                            className="w-10 h-10 flex items-center justify-center bg-gray-50 border border-gray-200 rounded-r-lg text-gray-500 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition print:hidden active:bg-green-100"
+                                          >
+                                            <Plus size={16} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </section>
+                    )}
+
+                  </div>
+
+                  {/* Right Column: Cost Summary (Sticky) */}
+                  <div className="lg:w-1/4 print:w-full print:mt-8">
+                    <div className="sticky top-8 space-y-6">
+                      
+                      {/* Cost Card */}
+                      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden print:shadow-none print:border-2 print:border-gray-900">
+                        <div className="bg-slate-900 p-6 text-white print:bg-white print:text-black print:border-b print:border-gray-900">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText size={20} className="text-red-400 print:text-black" />
+                            <h3 className="font-bold text-lg">費用預估單</h3>
+                          </div>
+                          <p className="text-slate-400 text-xs print:text-gray-600">Quote #{new Date().getFullYear()}{String(new Date().getMonth()+1).padStart(2,'0')}{String(new Date().getDate()).padStart(2,'0')}</p>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                          {/* Selected Place Info */}
+                          <div className="pb-4 border-b border-dashed border-gray-200 space-y-2">
+                            <div className="flex justify-between items-start">
+                              <span className="text-gray-500 text-sm whitespace-nowrap">場所用途</span>
+                              <span className="font-bold text-slate-800 text-right text-sm">
+                                {selectedUsage ? (
+                                  <div>
+                                    <div>{placeStandards.find(p => p.id === selectedCategory)?.categoryName}</div>
+                                    <div className="text-xs text-gray-500 font-normal mt-1">{selectedUsage}</div>
+                                  </div>
+                                ) : <span className="text-gray-300">-</span>}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 text-sm">申報面積</span>
+                              <span className="font-bold text-slate-800">
+                                {area ? area + ' m²' : <span className="text-gray-300">-</span>}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 text-sm">樓層數</span>
+                              <span className="font-bold text-slate-800">
+                                {floors ? floors + ' 層' : <span className="text-gray-300">-</span>}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Fee Breakdown */}
+                          <div className="space-y-3 pt-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600 text-sm">簽證申報費</span>
+                              <span className="font-mono font-medium text-slate-900">
+                                NT$ {totalPrice.filing.toLocaleString()}
+                              </span>
+                            </div>
+                            {parseInt(area) > BASE_AREA_LIMIT && selectedCategory && (
+                              <div className="text-xs text-right text-gray-400 -mt-2">
+                                (含超額面積加價)
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-600 text-sm">設備檢修費</span>
+                              <span className="font-mono font-medium text-slate-900">
+                                NT$ {totalPrice.inspection.toLocaleString()}
+                              </span>
+                            </div>
+
+                            {totalPrice.other > 0 && (
+                              <div className="flex justify-between items-center text-blue-600">
+                                <span className="text-sm">其他費用 (複查)</span>
+                                <span className="font-mono font-medium">
+                                  NT$ {totalPrice.other.toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Extra Services Checkbox (Print hidden) */}
+                          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 print:hidden">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${includeRecheck ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300'}`}>
+                                {includeRecheck && <CheckCircle2 size={14} />}
+                              </div>
+                              <input 
+                                type="checkbox" 
+                                className="hidden"
+                                checked={includeRecheck}
+                                onChange={(e) => setIncludeRecheck(e.target.checked)}
+                              />
+                              <div className="text-sm">
+                                <span className="font-bold text-slate-700">含消防局複查陪同</span>
+                                <span className="block text-xs text-slate-500">+ NT$ {RECHECK_FEE.toLocaleString()}</span>
+                              </div>
+                            </label>
+                          </div>
+
+                          {/* Print-only Recheck Line */}
+                          {includeRecheck && (
+                            <div className="hidden print:block text-xs text-gray-500 italic">
+                              * 包含消防局現場複查陪同服務乙次
+                            </div>
+                          )}
+
+                          {/* Equipment Detail List (Only shows if > 0) */}
+                          {totalPrice.inspection > 0 && (
+                            <div className="bg-gray-50 p-3 rounded-lg text-xs space-y-1 max-h-40 overflow-y-auto print:max-h-none print:bg-transparent print:p-0 print:border-t print:border-gray-100 print:pt-3">
+                              <p className="font-bold text-gray-400 mb-2 print:text-black">設備明細：</p>
+                              {filteredEquipmentList.map(item => {
+                                const qty = quantities[item.id];
+                                if (!qty) return null;
+                                return (
+                                  <div key={item.id} className="flex justify-between text-gray-600 border-b border-dashed border-gray-100 pb-1 last:border-0">
+                                    <span>{item.name} x {qty}</span>
+                                    <span>${(qty * item.price).toLocaleString()}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Total */}
+                          <div className="pt-4 mt-2 border-t-2 border-gray-100 flex justify-between items-end">
+                            <span className="text-lg font-bold text-slate-800">預估總價</span>
+                            <div className="text-right">
+                              <span className="text-3xl font-bold text-red-600 print:text-black">
+                                ${totalPrice.total.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-gray-400 block uppercase tracking-wide">TWD / 未稅</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Print Only Footer */}
+                        <div className="hidden print:block p-6 border-t border-gray-200">
+                          <div className="text-sm text-gray-600 grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="font-bold text-black mb-1">承辦廠商</p>
+                                <p>正陽消防工程有限公司</p>
+                                <p>電話：0912-345-678</p>
+                                <p>統編：12345678</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-black mb-1">客戶簽署</p>
+                                <div className="h-16 border-b border-black mt-2"></div>
+                                <p className="mt-1 text-xs">日期：{new Date().toLocaleDateString()}</p>
+                              </div>
+                          </div>
+                          <p className="mt-6 text-[10px] text-gray-400 text-center">* 本報價單有效期限為 15 天，實際施工內容以現場勘驗為準。</p>
+                        </div>
+                      </div>
+
+                      {/* Call to Action */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 print:hidden">
+                        <div className="flex gap-3">
+                          <Info className="text-blue-600 flex-shrink-0" size={20} />
+                          <div className="text-sm">
+                              <h4 className="font-bold text-blue-900 mb-1">大型或高樓層場所？</h4>
+                              <p className="text-blue-800 mb-3">若您的場所超過 3000 m² 或為高層建築，建議直接預約技師場勘。</p>
+                              <button className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                                <UserCheck size={16}/> 預約免費場勘
+                              </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-gray-400 text-center print:hidden">
+                        <p>報價不含設備維修更換費用。</p>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<FireSafetyQuoteCalculator />);
+    </script>
+</body>
+</html>
